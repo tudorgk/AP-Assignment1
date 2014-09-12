@@ -31,18 +31,18 @@ data Inst
 type Prog = [Inst]
 
 -- | The type `Stack` represents the stack of the MSM.
-type Stack = ...
+type Stack = [Int] 
 
 -- | Regs is the type for keeping track of registers
-type Regs = ...
+type Regs = Map.Map Int Int
 
 
 -- | This data type encapsulates the state of a running MSM.
 data State = State
-             { prog  :: ...
-             , pc    :: ...
-             , stack :: ...
-             , regs  :: ...
+             { prog  :: Prog
+             , pc    :: Int
+             , stack :: Stack
+             , regs  :: Regs
              }
            deriving (Show)
 
@@ -52,7 +52,7 @@ data ErrorType = StackUnderflow
                | InvalidPC
                | Unspec String
                deriving (Show, Read, Eq)
-data Error = Error { errorType :: ErrorType, ... }
+data Error = Error { errorType :: ErrorType, errorMessage ::  String}
            deriving (Show, Eq)
 
 
