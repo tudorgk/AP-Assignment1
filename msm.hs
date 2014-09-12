@@ -59,69 +59,78 @@ data Error = Error { errorType :: ErrorType, errorMessage ::  String}
 -- | `initial` constructs the initial state of an MSM running the
 -- given program.
 initial :: Prog -> State
-initial p = ...
+initial p = State { prog = p
+                  , pc = 0                     
+                  , stack = []                   
+                  , regs = Map.empty                      
+                  }
 
 -- | This is the monad that is used to implement the MSM. 
-newtype MSM a = MSM (State -> ...)
+newtype MSM a = MSM (State ->Either ErrorType (a, State))
 
 instance Monad MSM where
-    -- (>>=) :: MSM a -> (a -> MSM b) -> MSM b
-    (MSM p) >>= k = ...
-
     -- return :: a -> MSM a
-    return a = ...
+    return x = MSM (\s -> (x,s))
+    
+    -- (>>=) :: MSM a -> (a -> MSM b) -> MSM b
+    (MSM p) >>= f = MSM (\s -> let (aValue, previousState) = p s;
+                                           (MSM newStatefulComputation) = f aValue
+                                         in newStatefulComputation newState
+                            )
     
     -- fail :: String -> MSM a
-    fail s = ...
+    fail s = MSM (\x -> (x,s)) -- ??
 
--- Remember to make your monad a functor as well
+---- Remember to make your monad a functor as well
 instance Functor MSM where
-  ...
+  --fmap :: (Functor f) => (a -> b) -> f a -> f b  
+  f xs = xs >>= return . f
 
--- And perhaps also an Applicative
--- instance Applicative MSM where
---  ...
+---- And perhaps also an Applicative
+ instance Applicative MSM where
+  pure = return
+  df <*> dx = df >>= \f -> dx >>= return . f
 
 -- | `get` returns the current state of the running MSM.
 get :: MSM State
-get = ...
+get = MSM $ \s -> (_,s)  
 
 -- | set a new state for the running MSM.
 set :: State -> MSM ()
-set m = ...
+set newState = MSM $ \s -> ((),newState)  
 
--- | modify the state for the running MSM according to
--- the provided function argument
+---- | modify the state for the running MSM according to
+---- the provided function argument
 modify :: (State -> State) -> MSM ()
-modify f = ...
+modify f = MSM $ \s ->  ((), f s)
 
 
--- | This function provides the instruction the PC currently points
--- to. If the PC is out of bounds, the MSM halts with an error.
-getInst :: ...
-getInst = ...
+---- | This function provides the instruction the PC currently points
+---- to. If the PC is out of bounds, the MSM halts with an error.
+--getInst :: ...
+--getInst = ...
 
 
--- | This function runs the MSM.
-interp :: MSM ()
-interp = run
-    where run = do inst <- getInst
-                   cont <- interpInst inst
-                   when cont run
+---- | This function runs the MSM.
+--interp :: MSM ()
+--interp = run
+--    where run = do inst <- getInst
+--                   cont <- interpInst inst
+--                   when cont run
 
--- | This function interprets the given instruction. It returns True
--- if the MSM is supposed to continue it's execution after this
--- instruction.
-interpInst :: Inst -> MSM Bool
-interpInst inst = ...
+---- | This function interprets the given instruction. It returns True
+---- if the MSM is supposed to continue it's execution after this
+---- instruction.
+--interpInst :: Inst -> MSM Bool
+--interpInst inst = ...
 
--- | Run the given program on the MSM
-runMSM :: Prog -> ...
-runMSM p = let (MSM f) = interp 
-           in fmap snd $ f $ initial p
+---- | Run the given program on the MSM
+--runMSM :: Prog -> ...
+--runMSM p = let (MSM f) = interp 
+--           in fmap snd $ f $ initial p
 
 
 
--- example program, when it terminates it leaves 42 on the top of the stack
-p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
+---- example program, when it terminates it leaves 42 on the top of the stack
+--p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
 
