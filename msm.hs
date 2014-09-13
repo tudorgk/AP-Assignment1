@@ -34,7 +34,6 @@ type Stack = [Int]
 -- | Regs is the type for keeping track of registers
 type Regs = Map.Map Int Int
 
-
 -- | This data type encapsulates the state of a running MSM.
 data State = State
              { prog  :: Prog
@@ -50,7 +49,7 @@ data ErrorType = StackUnderflow
                | InvalidPC
                | Unspec String
                deriving (Show, Read, Eq)
-data Error = Error { errorType :: ErrorType, errorMessage ::  String}
+data Error = Error { errorType :: ErrorType}
            deriving (Show, Eq)
 
 
@@ -64,14 +63,14 @@ initial p = State { prog = p
                   }
 
 -- | This is the monad that is used to implement the MSM. 
-newtype MSM a = MSM (State -> Either Error (a, State))
+newtype MSM a = MSM (State -> Either String (a, State))
 
 instance Monad MSM where
     -- return :: a -> MSM a
     return a = MSM (\x -> Right (a,x))
     
     -- fail :: String -> MSM a
-    fail s = MSM (\x -> Left Error{errorMessage = s, errorType = InvalidPC})
+    fail s = MSM (\x -> Left s)
     
     -- (>>=) :: MSM a -> (a -> MSM b) -> MSM b
     (MSM p) >>= k = MSM (\s -> case p s of
@@ -112,7 +111,7 @@ getInst :: MSM Inst
 getInst = do
   stat <- get -- get the state
   if pc stat > length (prog stat) || (pc stat) < 0 -- check pc from state bounds
-    then error "Invalid PC " -- respond with an error
+    then fail "Invalid PC " -- respond with an error
     else return $ (prog stat) !! (pc stat) -- return the inst at the PC index from the Prog list
 
 -- | This function runs the MSM.
@@ -131,20 +130,38 @@ interpInst inst = do
   case inst of 
     PUSH a -> do 
         push a currentState
-        return True
 
 
-push :: Int -> State -> MSM ()
-push a currentState = set currentState{stack = a:stack currentState, pc = pc currentState +1} 
+push :: Int -> State -> MSM Bool
+push a aState = do
+  set aState{stack = a:stack aState, pc = pc aState +1}
+  return True
 
+pop :: State -> MSM Bool
+pop aState = do 
+  if List.null (stack aState)
+    then fail (decodeError Error{errorType = StackUnderflow})
+    else set aState{stack = tail $ stack aState, pc = pc aState +1 } 
+  return True
 
+dup :: State -> MSM Bool
+dup aState = do
+  if List.null (stack aState) 
+    then fail (decodeError Error{errorType = StackUnderflow})
+    else set aState{stack = head( stack aState) : stack aState, pc = pc aState +1 } 
+  return True
 ---- | Run the given program on the MSM
 --runMSM :: Prog -> ...
 --runMSM p = let (MSM f) = interp 
 --           in fmap snd $ f $ initial p
 
+decodeError :: Error -> String
+decodeError anError = case (errorType anError) of
+  InvalidPC -> "Invalid PC"
+  StackUnderflow -> "StackUnderflow"
+  
 
-
----- example program, when it terminates it leaves 42 on the top of the stack
+  
+--InvalidPCxample program, when it terminates it leaves 42 on the top of the stack
 --p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
 
