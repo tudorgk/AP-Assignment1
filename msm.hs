@@ -55,7 +55,6 @@ data ErrorType = StackUnderflow
 data Error = Error { errorType :: ErrorType}
            deriving (Show, Eq)
 
-
 -- | `initial` constructs the initial state of an MSM running the
 -- given program.
 initial :: Prog -> State
@@ -93,6 +92,10 @@ instance Applicative MSM where
   pure = return
   df <*> dx = df >>= \f -> dx >>= return . f
 
+-- helper function to trace the monad
+traceMonad :: (Show a, Monad m) => a -> m a
+traceMonad x = trace ("test: " ++ show x) (return x)
+
 -- | `get` returns the current state of the running MSM.
 get :: MSM State
 get = MSM (\x -> Right (x,x))
@@ -112,10 +115,10 @@ modify f = MSM (\s -> Right ((), f s))
 -- to. If the PC is out of bounds, the MSM halts with an error.
 getInst :: MSM Inst
 getInst = do
-  stat <- get -- get the state
-  if pc stat > length (prog stat) || pc stat < 0 -- check pc from state bounds
+  state <- get -- get the state
+  if pc state > length (prog state) || pc state < 0 -- check pc from state bounds
     then fail (decodeError Error {errorType = InvalidPC}) -- respond with an error
-    else return $ prog stat !! pc stat-- return the inst at the PC index from the Prog list
+    else return $ prog state !! pc state-- return the inst at the PC index from the Prog list
 
 -- | This function runs the MSM.
 interp :: MSM ()
@@ -128,19 +131,22 @@ interp = run
 -- if the MSM is supposed to continue it's execution after this
 -- instruction.
 interpInst :: Inst -> MSM Bool
-interpInst inst | Trace.trace("called interpinst with inst "++ show inst) False = undefined
 interpInst inst = do
   currentState <- get
+  traceMonad currentState -- show the state for debugging
   case inst of 
     PUSH a -> do 
-        push a currentState
+      push a currentState
     POP -> do 
-        pop currentState
+      pop currentState
+    SWAP -> do
+      swap currentState
+    HALT -> do -- Stop! Cease and desist!
+      return False
     
 
 
 push :: Int -> State -> MSM Bool  
-push a aState | Trace.trace ("push called with state" ++ show aState) False = undefined
 push a aState = do
   set aState{stack = a:stack aState, pc = pc aState + 1}
   return True
@@ -149,22 +155,42 @@ pop :: State -> MSM Bool -- how do I return Int if cont expects a Bool value??
 pop aState = do 
   let (first:others) = stack aState
   if List.null (stack aState)
-    then fail (decodeError Error{errorType = StackUnderflow})
+    then fail $ decodeError Error{errorType = StackUnderflow}
     else set aState{stack = others, pc = pc aState + 1 }  
   return True
-
 
 dup :: State -> MSM Bool
 dup aState = do
   if List.null (stack aState) 
-    then fail (decodeError Error{errorType = StackUnderflow})
+    then fail $ decodeError Error{errorType = StackUnderflow}
     else set aState{stack = head(stack aState) : stack aState, pc = pc aState + 1 }
   return True 
+
+swapStack::Stack -> Stack
+swapStack stackToSwap = 
+  let (first, second) = (head stackToSwap, head $ tail stackToSwap) in
+  second : first : drop 2 stackToSwap
+
+
+swap :: State -> MSM Bool
+swap aState = do
+  if length  (stack aState) < 2 
+    then fail $ decodeError Error{errorType = StackUnderflow}
+    else set aState{stack = swapStack (stack aState), pc = pc aState + 1} 
+  return True
+
+newreg :: Int -> State -> MSM Bool
+newreg aReg aState = do
+  if Map.member aReg (regs aState)
+    then fail $ decodeError Error{errorType = RegisterAlreadyAllocated}
+    else set aState{regs = Map.insert aReg 0 (regs aState), pc = pc aState + 1 }
+  return True
 
 decodeError :: Error -> String
 decodeError anError = case (errorType anError) of
   InvalidPC -> "Invalid PC"
   StackUnderflow -> "StackUnderflow"
+  RegisterAlreadyAllocated -> "Register already registered"
   
 ---- | Run the given program on the MSM
 runMSM :: Prog -> Either String State
@@ -174,4 +200,4 @@ runMSM p = let (MSM f) = interp
   
 --Example program, when it terminates it leaves 42 on the top of the stack
 --p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
-p21 = [PUSH 0, PUSH 1]
+p21 = [PUSH 0, PUSH 1, SWAP,HALT]
