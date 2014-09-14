@@ -191,16 +191,16 @@ swapStack stackToSwap =
 
 swap :: State -> MSM Bool
 swap aState = do
-  if length  (stack aState) < 2 
-    then fail $ decodeError Error{errorType = StackUnderflow}
-    else set aState{stack = swapStack (stack aState), pc = pc aState + 1} 
+  let checker | length  (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{stack = swapStack (stack aState), pc = pc aState + 1} 
+  checker
   return True
 
 newreg :: Int -> State -> MSM Bool
 newreg aReg aState = do
-  if Map.member aReg (regs aState) --check if it already exists
-    then fail $ decodeError Error{errorType = RegisterAlreadyAllocated}
-    else set aState{regs = Map.insert aReg 0 (regs aState), pc = pc aState + 1 }
+  let checker | Map.member aReg (regs aState) = fail $ decodeError Error{errorType = RegisterAlreadyAllocated}
+              | otherwise = set aState{regs = Map.insert aReg 0 (regs aState), pc = pc aState + 1 }
+  checker
   return True
 
 load :: State -> MSM Bool
