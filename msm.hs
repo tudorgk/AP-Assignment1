@@ -75,6 +75,7 @@ instance Monad MSM where
     fail s = MSM (\x -> Left s)
     
     -- (>>=) :: MSM a -> (a -> MSM b) -> MSM b
+    -- trying to write it like this so I can UNDERSTAND!!
     (MSM rightOrLeft) >>= appliedFunction = MSM (\state -> case rightOrLeft state of
                             Left aState -> Left aState
                             Right aState -> let Right (value, state2) = rightOrLeft state;
@@ -141,6 +142,12 @@ interpInst inst = do
       pop currentState
     SWAP -> do
       swap currentState
+    NEWREG a -> do
+      newreg a currentState
+    LOAD -> do
+      load currentState
+    STORE -> do
+      store currentState
     HALT -> do -- Stop! Cease and desist!
       return False
     
@@ -181,17 +188,36 @@ swap aState = do
 
 newreg :: Int -> State -> MSM Bool
 newreg aReg aState = do
-  if Map.member aReg (regs aState)
+  if Map.member aReg (regs aState) --check if it already exists
     then fail $ decodeError Error{errorType = RegisterAlreadyAllocated}
     else set aState{regs = Map.insert aReg 0 (regs aState), pc = pc aState + 1 }
   return True
+
+load :: State -> MSM Bool
+load aState = do
+  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
+              | not (Map.member (head (stack aState)) (regs aState)) = fail $ decodeError Error{errorType = UnallocatedRegister (head (stack aState)) }
+              | otherwise = set aState{stack = regs aState Map.! head (stack aState) : tail (stack aState), pc = pc aState + 1}
+  checker
+  return True
+
+store :: State -> MSM Bool
+store aState = do
+  let checker | not (Map.member (stack aState !! 1) (regs aState)) = fail $ decodeError Error{errorType = UnallocatedRegister (stack aState !! 1) }   
+              | length (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{regs = Map.insert (stack aState !! 1) (head (stack aState)) (regs aState), 
+                                                                        stack = drop 2 (stack aState), pc = pc aState + 1}
+  checker
+  return True
+
+
 
 decodeError :: Error -> String
 decodeError anError = case (errorType anError) of
   InvalidPC -> "Invalid PC"
   StackUnderflow -> "StackUnderflow"
   RegisterAlreadyAllocated -> "Register already registered"
-  
+  UnallocatedRegister a -> "UnallocatedRegister " ++ show a
 ---- | Run the given program on the MSM
 runMSM :: Prog -> Either String State
 runMSM p = let (MSM f) = interp
@@ -200,4 +226,4 @@ runMSM p = let (MSM f) = interp
   
 --Example program, when it terminates it leaves 42 on the top of the stack
 --p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
-p21 = [PUSH 0, PUSH 1, SWAP,HALT]
+p21 = [NEWREG 0, PUSH 0, PUSH 1, SWAP,LOAD,HALT]
