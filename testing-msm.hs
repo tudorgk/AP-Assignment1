@@ -64,4 +64,5 @@ tests = TestList [TestLabel "MSM testsuite" $ TestList [testEmpty0,testEmpty1,te
 
 
 -- main
-main = runTestTT tests
+main = do
+	runTestTT tests
