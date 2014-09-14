@@ -217,7 +217,7 @@ store aState = do
   let checker | not (Map.member (stack aState !! 1) (regs aState)) = fail $ decodeError Error{errorType = UnallocatedRegister (stack aState !! 1) }   
               | length (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
               | otherwise = set aState{regs = Map.insert (stack aState !! 1) (head (stack aState)) (regs aState), 
-                                                                        stack = drop 2 (stack aState), pc = pc aState + 1}
+                              stack = drop 2 (stack aState), pc = pc aState + 1}
   checker
   return True
 
