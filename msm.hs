@@ -9,6 +9,9 @@ import Data.List as List
 -- and you might also find Maps useful
 import qualified Data.Map as Map
 
+-- trying to debug stuff
+import Debug.Trace as Trace
+
 -- | The type of instructions for the MSM.
 data Inst 
     = PUSH Int
@@ -73,11 +76,11 @@ instance Monad MSM where
     fail s = MSM (\x -> Left s)
     
     -- (>>=) :: MSM a -> (a -> MSM b) -> MSM b
-    (MSM p) >>= k = MSM (\s -> case p s of
-                            Right v -> let Right (r, state1) = p s;
-                                               (MSM p1) = k r
-                                         in p1 state1
-                            Left v -> Left v
+    (MSM rightOrLeft) >>= appliedFunction = MSM (\state -> case rightOrLeft state of
+                            Left aState -> Left aState
+                            Right aState -> let Right (value, state2) = rightOrLeft state;
+                                                (MSM p2) = appliedFunction value
+                                                in p2 state2
                             )    
 
 ---- Remember to make your monad a functor as well
@@ -110,58 +113,65 @@ modify f = MSM (\s -> Right ((), f s))
 getInst :: MSM Inst
 getInst = do
   stat <- get -- get the state
-  if pc stat > length (prog stat) || (pc stat) < 0 -- check pc from state bounds
-    then fail "Invalid PC " -- respond with an error
-    else return $ (prog stat) !! (pc stat) -- return the inst at the PC index from the Prog list
+  if pc stat > length (prog stat) || pc stat < 0 -- check pc from state bounds
+    then fail (decodeError Error {errorType = InvalidPC}) -- respond with an error
+    else return $ prog stat !! pc stat-- return the inst at the PC index from the Prog list
 
 -- | This function runs the MSM.
 interp :: MSM ()
 interp = run
     where run = do inst <- getInst
                    cont <- interpInst inst
-                   when cont run
+                   when cont run -- cont needs to be Bool so how do I return an Int from pop??
 
 -- | This function interprets the given instruction. It returns True
 -- if the MSM is supposed to continue it's execution after this
 -- instruction.
 interpInst :: Inst -> MSM Bool
+interpInst inst | Trace.trace("called interpinst with inst "++ show inst) False = undefined
 interpInst inst = do
   currentState <- get
   case inst of 
     PUSH a -> do 
         push a currentState
+    POP -> do 
+        pop currentState
+    
 
 
-push :: Int -> State -> MSM Bool
+push :: Int -> State -> MSM Bool  
+push a aState | Trace.trace ("push called with state" ++ show aState) False = undefined
 push a aState = do
-  set aState{stack = a:stack aState, pc = pc aState +1}
+  set aState{stack = a:stack aState, pc = pc aState + 1}
   return True
 
-pop :: State -> MSM Bool
+pop :: State -> MSM Bool -- how do I return Int if cont expects a Bool value??
 pop aState = do 
+  let (first:others) = stack aState
   if List.null (stack aState)
     then fail (decodeError Error{errorType = StackUnderflow})
-    else set aState{stack = tail $ stack aState, pc = pc aState +1 } 
+    else set aState{stack = others, pc = pc aState + 1 }  
   return True
+
 
 dup :: State -> MSM Bool
 dup aState = do
   if List.null (stack aState) 
     then fail (decodeError Error{errorType = StackUnderflow})
-    else set aState{stack = head( stack aState) : stack aState, pc = pc aState +1 } 
-  return True
----- | Run the given program on the MSM
---runMSM :: Prog -> ...
---runMSM p = let (MSM f) = interp 
---           in fmap snd $ f $ initial p
+    else set aState{stack = head(stack aState) : stack aState, pc = pc aState + 1 }
+  return True 
 
 decodeError :: Error -> String
 decodeError anError = case (errorType anError) of
   InvalidPC -> "Invalid PC"
   StackUnderflow -> "StackUnderflow"
   
+---- | Run the given program on the MSM
+runMSM :: Prog -> Either String State
+runMSM p = let (MSM f) = interp
+           in fmap snd $ f $ initial p
 
   
---InvalidPCxample program, when it terminates it leaves 42 on the top of the stack
+--Example program, when it terminates it leaves 42 on the top of the stack
 --p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
-
+p21 = [PUSH 0, PUSH 1]
