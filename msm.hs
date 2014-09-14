@@ -134,12 +134,14 @@ interp = run
 interpInst :: Inst -> MSM Bool
 interpInst inst = do
   currentState <- get
-  traceMonad currentState -- show the state for debugging
+  --traceMonad currentState -- show the state for debugging
   case inst of 
     PUSH a -> do 
       push a currentState
     POP -> do 
       pop currentState
+    DUP -> do
+      dup currentState
     SWAP -> do
       swap currentState
     NEWREG a -> do
@@ -148,6 +150,14 @@ interpInst inst = do
       load currentState
     STORE -> do
       store currentState
+    NEG -> do
+      neg currentState
+    ADD -> do
+      add currentState
+    JMP -> do
+      jmp currentState
+    CJMP a -> do
+      cjmp a currentState
     HALT -> do -- Stop! Cease and desist!
       return False
     
@@ -161,16 +171,16 @@ push a aState = do
 pop :: State -> MSM Bool -- how do I return Int if cont expects a Bool value??
 pop aState = do 
   let (first:others) = stack aState
-  if List.null (stack aState)
-    then fail $ decodeError Error{errorType = StackUnderflow}
-    else set aState{stack = others, pc = pc aState + 1 }  
+  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{stack = others, pc = pc aState + 1 }  
+  checker
   return True
 
 dup :: State -> MSM Bool
 dup aState = do
-  if List.null (stack aState) 
-    then fail $ decodeError Error{errorType = StackUnderflow}
-    else set aState{stack = head(stack aState) : stack aState, pc = pc aState + 1 }
+  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{stack = head(stack aState) : stack aState, pc = pc aState + 1 }
+  checker
   return True 
 
 swapStack::Stack -> Stack
@@ -210,7 +220,34 @@ store aState = do
   checker
   return True
 
+neg :: State -> MSM Bool
+neg aState = do
+  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{stack = head(stack aState)*(-1) : tail(stack aState), pc = pc aState + 1 } 
+  checker      
+  return True
 
+add :: State -> MSM Bool
+add aState = do
+  let checker | length (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{stack = head(stack aState) + head(tail(stack aState)) : drop 2 (stack aState), pc = pc aState + 1 } 
+  checker
+  return True
+
+jmp :: State -> MSM Bool
+jmp aState = do
+  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = set aState{pc = head(stack aState), stack = tail(stack aState) }  
+  checker
+  return True
+
+cjmp :: Int -> State -> MSM Bool
+cjmp a aState = do
+  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
+              | head (stack aState) < 0 = set aState{stack = tail (stack aState), pc = a}
+              | otherwise = set aState{stack = tail (stack aState), pc = pc aState + 1}
+  checker
+  return True
 
 decodeError :: Error -> String
 decodeError anError = case (errorType anError) of
@@ -218,6 +255,8 @@ decodeError anError = case (errorType anError) of
   StackUnderflow -> "StackUnderflow"
   RegisterAlreadyAllocated -> "Register already registered"
   UnallocatedRegister a -> "UnallocatedRegister " ++ show a
+
+
 ---- | Run the given program on the MSM
 runMSM :: Prog -> Either String State
 runMSM p = let (MSM f) = interp
@@ -225,5 +264,5 @@ runMSM p = let (MSM f) = interp
 
   
 --Example program, when it terminates it leaves 42 on the top of the stack
---p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
-p21 = [NEWREG 0, PUSH 0, PUSH 1, SWAP,LOAD,HALT]
+p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
+p21 = [NEWREG 1, PUSH 0, PUSH 1,  DUP, NEG,SWAP,LOAD,HALT]
