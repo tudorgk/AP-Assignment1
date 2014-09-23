@@ -69,7 +69,7 @@ initial p = State { prog = p
                   }
 
 -- | This is the monad that is used to implement the MSM. 
-newtype MSM a = MSM (State -> Either String (a, State))
+newtype MSM a = MSM { unMSM :: State -> Either String (a, State) }
 
 instance Monad MSM where
     -- return :: a -> MSM a
@@ -80,12 +80,8 @@ instance Monad MSM where
     
     -- (>>=) :: MSM a -> (a -> MSM b) -> MSM b
     -- trying to write it like this so I can UNDERSTAND!!
-    (MSM rightOrLeft) >>= appliedFunction = MSM (\state -> case rightOrLeft state of
-                            Left aState -> Left aState
-                            Right aState -> let Right (value, state2) = rightOrLeft state;
-                                                (MSM p2) = appliedFunction value
-                                                in p2 state2
-                            )    
+    (MSM ma) >>= func = MSM $ \ st -> do (a, st') <- ma st
+                                         unMSM (func a) st'
 
 ---- Remember to make your monad a functor as well
 instance Functor MSM where
@@ -138,120 +134,149 @@ interp = run
 interpInst :: Inst -> MSM Bool
 interpInst inst = do
   currentState <- get
+  set currentState {pc = pc currentState + 1}
   --traceMonad currentState -- show the state for debugging
   case inst of 
     PUSH a -> do 
-      push a currentState
+      push a 
+      return True
     POP -> do 
-      pop currentState
+      x <- pop 
+      return True
     DUP -> do
-      dup currentState
+      dup 
+      return True
     SWAP -> do
-      swap currentState
+      swap 
+      return True
     NEWREG a -> do
-      newreg a currentState
+      newreg a 
+      return True
     LOAD -> do
-      load currentState
+      load 
+      return True
     STORE -> do
-      store currentState
+      store 
+      return True
     NEG -> do
-      neg currentState
+      neg 
+      return True
     ADD -> do
-      add currentState
+      add 
+      return True
     JMP -> do
-      jmp currentState
+      jmp 
+      return True
     CJMP a -> do
-      cjmp a currentState
+      cjmp a 
+      return True
     HALT -> do -- Stop! Cease and desist!
       return False
     
 
 
-push :: Int -> State -> MSM Bool  
-push a aState = do
-  set aState{stack = a:stack aState, pc = pc aState + 1}
-  return True
+push :: Int -> MSM ()  
+push a  = do
+  aState <- get
+  set aState{stack = a:stack aState}
 
-pop :: State -> MSM Bool -- how do I return Int if cont expects a Bool value??
-pop aState = do 
+pop ::  MSM Int -- how do I return Int if cont expects a Bool value??
+pop  = do 
+  aState <- get
   let (first:others) = stack aState
   let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{stack = others, pc = pc aState + 1 }  
+              | otherwise = set aState{stack = others}  
   checker
-  return True
+  return (head (stack aState)) 
 
-dup :: State -> MSM Bool
-dup aState = do
-  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{stack = head(stack aState) : stack aState, pc = pc aState + 1 }
+dup :: MSM ()
+dup = do
+  x <- pop
+  push x
+  push x
+   
+
+swap :: MSM ()
+swap = do
+  x <- pop
+  y <- pop
+  push x 
+  push y
+  
+
+newreg :: Int -> MSM ()
+newreg aReg = do
+  aState <- get
+  let checker | Map.member aReg (regs aState) = 
+                  fail $ decodeError Error {
+                    errorType = RegisterAlreadyAllocated
+                  }
+              | otherwise =
+                  set aState { 
+                    regs = Map.insert aReg 0 (regs aState)
+                  }
   checker
-  return True 
+  
 
-swapStack::Stack -> Stack
-swapStack stackToSwap = 
-  let (first, second) = (head stackToSwap, head $ tail stackToSwap) in
-  second : first : drop 2 stackToSwap
-
-
-swap :: State -> MSM Bool
-swap aState = do
-  let checker | length  (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{stack = swapStack (stack aState), pc = pc aState + 1} 
+load :: MSM ()
+load = do
+  aState <- get
+  let checker | List.null (stack aState) = 
+                  fail $ decodeError Error{errorType = StackUnderflow}
+              | not (Map.member (head (stack aState)) (regs aState)) = 
+                  fail $ decodeError Error {
+                    errorType = UnallocatedRegister (head (stack aState)) 
+                  }
+              | otherwise = 
+                  set aState{
+                    stack = regs aState Map.! head (stack aState) : tail (stack aState)
+                  }
   checker
-  return True
 
-newreg :: Int -> State -> MSM Bool
-newreg aReg aState = do
-  let checker | Map.member aReg (regs aState) = fail $ decodeError Error{errorType = RegisterAlreadyAllocated}
-              | otherwise = set aState{regs = Map.insert aReg 0 (regs aState), pc = pc aState + 1 }
+
+store ::  MSM ()
+store = do
+  aState <- get
+  let checker | not (Map.member (stack aState !! 1) (regs aState)) =
+                  fail $ decodeError Error {
+                    errorType = UnallocatedRegister (stack aState !! 1)
+                  }   
+              | length (stack aState) < 2 = 
+                  fail $ decodeError Error{errorType = StackUnderflow}
+              | otherwise = 
+                  set aState {
+                    regs = Map.insert (stack aState !! 1) (head (stack aState)) (regs aState),
+                    stack = drop 2 (stack aState)
+                  }
   checker
-  return True
 
-load :: State -> MSM Bool
-load aState = do
-  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
-              | not (Map.member (head (stack aState)) (regs aState)) = fail $ decodeError Error{errorType = UnallocatedRegister (head (stack aState)) }
-              | otherwise = set aState{stack = regs aState Map.! head (stack aState) : tail (stack aState), pc = pc aState + 1}
-  checker
-  return True
+neg ::  MSM Int
+neg  = do
+  x <- pop
+  push (x * (-1))
+  return (x * (-1))
 
-store :: State -> MSM Bool
-store aState = do
-  let checker | not (Map.member (stack aState !! 1) (regs aState)) = fail $ decodeError Error{errorType = UnallocatedRegister (stack aState !! 1) }   
-              | length (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{regs = Map.insert (stack aState !! 1) (head (stack aState)) (regs aState), 
-                              stack = drop 2 (stack aState), pc = pc aState + 1}
-  checker
-  return True
+add :: MSM Int
+add = do
+  x <- pop
+  y <- pop
+  push (x + y)
+  return (x + y)
 
-neg :: State -> MSM Bool
-neg aState = do
-  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{stack = head(stack aState)*(-1) : tail(stack aState), pc = pc aState + 1 } 
-  checker      
-  return True
+jmp :: MSM ()
+jmp = do
+  x <- pop
+  aState <- get
+  set (aState {pc = x})
 
-add :: State -> MSM Bool
-add aState = do
-  let checker | length (stack aState) < 2 = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{stack = head(stack aState) + head(tail(stack aState)) : drop 2 (stack aState), pc = pc aState + 1 } 
-  checker
-  return True
-
-jmp :: State -> MSM Bool
-jmp aState = do
-  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
-              | otherwise = set aState{pc = head(stack aState), stack = tail(stack aState) }  
-  checker
-  return True
-
-cjmp :: Int -> State -> MSM Bool
-cjmp a aState = do
-  let checker | List.null (stack aState) = fail $ decodeError Error{errorType = StackUnderflow}
-              | head (stack aState) < 0 = set aState{stack = tail (stack aState), pc = a}
-              | otherwise = set aState{stack = tail (stack aState), pc = pc aState + 1}
-  checker
-  return True
+cjmp :: Int -> MSM ()
+cjmp a = do
+  x <- pop
+  aState <- get
+  if x > 0
+  then do set (aState {pc = pc aState +1 })
+  else do set (aState {pc = a})
+  
 
 decodeError :: Error -> String
 decodeError anError = case (errorType anError) of
