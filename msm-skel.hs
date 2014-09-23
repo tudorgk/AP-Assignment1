@@ -1,3 +1,5 @@
+-- Author: Tudor-Stefan Dragan
+
 module MSM where
 
 -- we want to use monads here

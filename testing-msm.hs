@@ -1,3 +1,6 @@
+-- Author: Tudor-Stefan Dragan
+
+
 module Main where
 import Test.HUnit
 import Data.Either as Either
