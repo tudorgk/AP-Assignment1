@@ -62,7 +62,7 @@ data CustomError = StackUnderflow
 {-TDOO: I was trying to do the 5th point from this link:
   http://www.randomhacks.net/2007/03/10/haskell-8-ways-to-report-errors/.
   And failed miserably :(. May you please guide me on how I should do the
-  throwError? The version with the MonadError instance is in msm2.hs
+  throwError? Tried implementing MonadError but I can't wrap my head around it.
 -}
 
 instance Show CustomError where

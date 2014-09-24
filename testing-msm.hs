@@ -2,12 +2,13 @@
 
 
 module Main where
-import Test.HUnit
-import Data.Either as Either
-import Control.Exception (ErrorCall(ErrorCall), evaluate)
-import Test.HUnit.Tools (assertRaises)
 
 import MSM
+import Test.HUnit
+-- please install testpack for this to work
+import Control.Exception (ErrorCall(ErrorCall), evaluate)
+import Test.HUnit.Tools (assertRaises) 
+
 
 instance Eq ErrorCall where
     x == y = (show x) == (show y)
