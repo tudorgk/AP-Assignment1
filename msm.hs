@@ -69,7 +69,7 @@ initial p = State { prog = p
                   }
 
 -- | This is the monad that is used to implement the MSM. 
-newtype MSM a = MSM { unMSM :: State -> Either String (a, State) }
+newtype MSM a = MSM { unMSM :: State -> Either Error (a, State) }
 
 instance Monad MSM where
     -- return :: a -> MSM a
