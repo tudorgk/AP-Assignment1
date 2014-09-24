@@ -1,7 +1,7 @@
 -- Author: Tudor-Stefan Dragan
 
 --DONE: Don’t let your modules export more than they have to.
-module MSM (runMSM) where
+module MSM (runMSM , Inst (..), CustomError (..) )where
 
 -- we want to use monads here
 import Control.Monad

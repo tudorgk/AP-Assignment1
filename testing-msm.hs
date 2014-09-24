@@ -4,7 +4,17 @@
 module Main where
 import Test.HUnit
 import Data.Either as Either
+import Control.Exception (ErrorCall(ErrorCall), evaluate)
+import Test.HUnit.Tools (assertRaises)
+
 import MSM
+
+instance Eq ErrorCall where
+    x == y = (show x) == (show y)
+
+assertError msg ex f = 
+    assertRaises msg (ErrorCall ex) $ evaluate f
+
 
 -- check if [] 
 emptyStack0 =  [POP, HALT]
@@ -33,38 +43,35 @@ outOfBoundsPC1 =  [PUSH (-4), JMP, HALT]
 p42 = [NEWREG 0, PUSH 1, DUP, NEG, ADD, PUSH 40, STORE, PUSH 2, PUSH 0, LOAD, ADD, HALT]
 
 
-testEmpty0 = TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM emptyStack0])
+testEmpty0 = TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM emptyStack0)
 
-testEmpty1 =  TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM emptyStack1])
+testEmpty1 =  TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM emptyStack1)
 
-testEmpty2 =  TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM emptyStack2])
+testEmpty2 =  TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM emptyStack2)
 
-testEmpty3 =  TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM emptyStack4])
+testEmpty3 =  TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM emptyStack4)
 
-testEmpty4 =  TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM emptyStack4])
+testEmpty4 =  TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM emptyStack4)
 
-testEmpty5 =  TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM emptyStack5])
+testEmpty5 =  TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM emptyStack5)
 
-testonlyOneElem0 = TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM onlyOneElem0])
+testonlyOneElem0 = TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM onlyOneElem0)
 
-testonlyOneElem1 = TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" ==  head(Either.lefts [MSM.runMSM onlyOneElem1])
+testonlyOneElem1 = TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM onlyOneElem1)
 
-testonlyOneElem2 = TestCase $ assertBool "Stack doesn't have enough elements" $ "StackUnderflow" == head(Either.lefts [MSM.runMSM onlyOneElem2])
+testonlyOneElem2 = TestCase $ assertError "Stack doesn't have enough elements" (show StackUnderflow) (MSM.runMSM onlyOneElem2)
 
-testnoReg = TestCase $ assertBool "Register not allocated" $ "UnallocatedRegister 1" ==  head(Either.lefts [MSM.runMSM noReg])
+testnoReg = TestCase $ assertError "Register not allocated" (show $ UnallocatedRegister 1) (MSM.runMSM noReg)
 
-testallocSame = TestCase $ assertBool "Register already allocated" $ "Register already registered" ==  head(Either.lefts [MSM.runMSM allocSame])
+testallocSame = TestCase $ assertError "Register already allocated" (show RegisterAlreadyAllocated) (MSM.runMSM allocSame)
 
-testoutOfBoundsPC0 = TestCase $ assertBool "PC out of bounds" $ "Invalid PC" ==  head(Either.lefts [MSM.runMSM outOfBoundsPC0])
+testoutOfBoundsPC0 = TestCase $ assertError "PC out of bounds" (show InvalidPC) (MSM.runMSM outOfBoundsPC0)
 
-testoutOfBoundsPC1 = TestCase $ assertBool "PC out of bounds" $ "Invalid PC" ==  head(Either.lefts [MSM.runMSM outOfBoundsPC1])
+testoutOfBoundsPC1 = TestCase $  assertError "PC out of bounds" (show InvalidPC)  (MSM.runMSM outOfBoundsPC1)
 
-
-testprogram42 = TestCase $ assertBool "Program 42 works" $ 42 `elem` stack (head(Either.rights [MSM.runMSM p42])) 
-
+testprogram42 = TestCase $ assertBool "Program 42 works" $ 42 == (MSM.runMSM p42)
 
 tests = TestList [TestLabel "MSM testsuite" $ TestList [testEmpty0,testEmpty1,testEmpty2,testEmpty3,testEmpty4,testEmpty5,testonlyOneElem0,testonlyOneElem1,testonlyOneElem2,testnoReg,testallocSame,testoutOfBoundsPC0,testoutOfBoundsPC1,testprogram42]]
-
 
 -- main
 main = do
