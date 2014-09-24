@@ -31,7 +31,5 @@ I've figured out how to extract the last element from the stack :). The `runMSM`
 
 I've modified the stack manipulation functions so that they use each other (for ex. `dup` function uses `push` and `pop` respectively)
 
-MSM2
-----
 
 
